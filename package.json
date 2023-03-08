@@ -1,0 +1,25 @@
+{
+  "name": "isolated-transactions",
+  "version": "1.0.0",
+  "description": "Run isolated database transactions using AsyncLocalStorage",
+  "main": "isolated-transactions.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mokuteki225/isolated-transactions.git"
+  },
+  "keywords": [
+    "database",
+    "transaction",
+    "acid",
+    "async-local-storage"
+  ],
+  "author": "Vladyslav Kondratiuk",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mokuteki225/isolated-transactions/issues"
+  },
+  "homepage": "https://github.com/mokuteki225/isolated-transactions#readme"
+}
