@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface ITransactionRunner {
   /**
-   * Get transaction object in order to store it in AsyncLocalStorage
+   * Get transaction object to store it in AsyncLocalStorage
    */
   start(): Promise<unknown>;
 
@@ -20,5 +20,7 @@ export class IsolatedTransaction {
 
   rollback(): Promise<void>;
 
-  run<T>(store: unknown, callback: () => T): T;
+  run<T>(connection: unknown, callback: () => T): T;
+
+  getStoredConnection<T extends unknown>(): T | undefined;
 }
