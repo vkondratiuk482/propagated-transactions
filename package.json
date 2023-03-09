@@ -1,8 +1,8 @@
 {
-  "name": "isolated-transactions",
+  "name": "@mokuteki/isolated-transactions",
   "version": "1.0.0",
   "description": "Convenient wrapper to run database transactions in isolated context using AsyncLocalStorage",
-  "main": "isolated-transaction.js",
+  "main": "lib/isolated-transaction.js",
   "scripts": {
     "test": "node --test test/suits/"
   },
@@ -37,5 +37,9 @@
     "#root/*.js": "./*.js",
     "#test/*.js": "./test/*.js"
   },
-  "exports": "./lib/isolated-transaction.js"
+  "exports": "./lib/isolated-transaction.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  }
 }
