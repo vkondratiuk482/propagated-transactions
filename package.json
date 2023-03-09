@@ -1,11 +1,12 @@
 {
   "name": "isolated-transactions",
   "version": "1.0.0",
-  "description": "Run isolated database transactions using AsyncLocalStorage",
-  "main": "isolated-transactions.js",
+  "description": "Convenient wrapper to run database transactions in isolated context using AsyncLocalStorage",
+  "main": "isolated-transaction.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/suits/"
   },
+  "types": "types/isolated-transaction.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mokuteki225/isolated-transactions.git"
@@ -21,5 +22,20 @@
   "bugs": {
     "url": "https://github.com/mokuteki225/isolated-transactions/issues"
   },
-  "homepage": "https://github.com/mokuteki225/isolated-transactions#readme"
+  "homepage": "https://github.com/mokuteki225/isolated-transactions#readme",
+  "devDependencies": {
+    "@types/node": "^18.14.6",
+    "eslint": "^8.35.0",
+    "eslint-config-prettier": "^8.7.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "knex": "^2.4.2",
+    "pg": "^8.10.0",
+    "prettier": "^2.8.4",
+    "typescript": "^4.9.5"
+  },
+  "imports": {
+    "#root/*.js": "./*.js",
+    "#test/*.js": "./test/*.js"
+  },
+  "exports": "./lib/isolated-transaction.js"
 }

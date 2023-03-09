@@ -1,14 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-export interface ITransactionRunner {
+export interface ITransactionRunner<T extends unknown> {
   /**
    * Get transaction object to store it in AsyncLocalStorage
    */
-  start(): Promise<unknown>;
+  start(): Promise<T>;
 
-  commit(): Promise<void>;
+  commit(connection: T): Promise<void>;
   
-  rollback(): Promise<void>;
+  rollback(connection: T): Promise<void>;
 }
 
 export class IsolatedTransaction {

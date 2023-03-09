@@ -1,0 +1,10 @@
+{
+  "extends": ["plugin:prettier/recommended"],
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "parserOptions": {
+    "ecmaScript": 2022
+  }
+}
