@@ -188,7 +188,7 @@ export class UserService {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.create();
+        await this.isolatedTransaction.commit();
 
         return user;
       } catch (err) {
@@ -225,7 +225,7 @@ export class UserService {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.create();
+        await this.isolatedTransaction.commit();
 
         return user;
       } catch (err) {
@@ -252,7 +252,7 @@ export class UserService {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.create();
+        await this.isolatedTransaction.commit();
 
         return user;
       } catch (err) {
