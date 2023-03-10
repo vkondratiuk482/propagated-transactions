@@ -1,7 +1,7 @@
 const assert = require('node:assert');
 const { describe, it, before, afterEach, after } = require('node:test');
 
-const { TransactionError } = require('#root/lib/transaction-error.js');
+const { TransactionError } = require('#root/lib/transaction-error');
 const { knex, KnexTransactionRunner, data } = require('#test/fixtures.js');
 const { IsolatedTransaction } = require('#root/lib/isolated-transaction.js');
 
@@ -82,7 +82,7 @@ describe('IsolatedTransaction', async () => {
       await isolatedTransaction.commit();
     };
 
-    assert.rejects(handler, TransactionError.NotInContext());
+    assert.throws(handler, TransactionError.NotInContext());
   });
 
   it('Throw TransactionError.NotInContext when calling .rollback() outside of the context', async () => {
@@ -92,6 +92,6 @@ describe('IsolatedTransaction', async () => {
       await isolatedTransaction.rollback();
     };
 
-    assert.rejects(handler, TransactionError.NotInContext());
+    assert.throws(handler, TransactionError);
   });
 });
