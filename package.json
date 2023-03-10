@@ -1,6 +1,6 @@
 {
   "name": "@mokuteki/isolated-transactions",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Convenient wrapper to run database transactions in isolated context using AsyncLocalStorage",
   "main": "lib/isolated-transaction.js",
   "scripts": {
