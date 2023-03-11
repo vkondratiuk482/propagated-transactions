@@ -11,7 +11,7 @@ export interface ITransactionRunner<T extends unknown> {
   rollback(connection: T): Promise<void>;
 }
 
-export class IsolatedTransaction<T extends unknown> {
+export class PropagatedTransaction<T extends unknown> {
   connection: T;
 
   constructor(runner: ITransactionRunner<T>, als?: AsyncLocalStorage<T>);

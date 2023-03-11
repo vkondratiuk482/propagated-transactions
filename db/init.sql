@@ -1,3 +1,3 @@
 CREATE USER mokuteki WITH PASSWORD 'pass123';
-DROP DATABASE IF EXISTS isolated-test
-CREATE DATABASE isolated-test OWNER mokuteki;
+DROP DATABASE IF EXISTS propagated-test
+CREATE DATABASE propagated-test OWNER mokuteki;

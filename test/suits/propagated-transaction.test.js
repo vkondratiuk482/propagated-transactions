@@ -3,9 +3,11 @@ const { describe, it, before, afterEach, after } = require('node:test');
 
 const { TransactionError } = require('#root/lib/transaction-error.js');
 const { knex, KnexTransactionRunner, data } = require('#test/fixtures.js');
-const { IsolatedTransaction } = require('#root/lib/isolated-transaction.js');
+const {
+  PropagatedTransaction,
+} = require('#root/lib/propagated-transaction.js');
 
-describe('IsolatedTransaction', async () => {
+describe('PropagatedTransaction', async () => {
   before(async () => {
     await knex.schema.dropTableIfExists('user');
     await knex.schema.createTable('user', (table) => {
@@ -24,23 +26,21 @@ describe('IsolatedTransaction', async () => {
   });
 
   it('Successfully create user inside of knex transaction', async () => {
-    const isolatedTransaction = new IsolatedTransaction(KnexTransactionRunner);
+    const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await isolatedTransaction.start();
+    const connection = await ptx.start();
 
     const callback = async () => {
       try {
-        const user = await isolatedTransaction
-          .connection('user')
-          .insert(data.user);
+        const user = await ptx.connection('user').insert(data.user);
 
-        await isolatedTransaction.commit();
+        await ptx.commit();
       } catch (err) {
-        await isolatedTransaction.rollback();
+        await ptx.rollback();
       }
     };
 
-    await isolatedTransaction.run(connection, callback);
+    await ptx.run(connection, callback);
 
     const selected = await knex
       .select('id', 'name', 'surname')
@@ -52,19 +52,17 @@ describe('IsolatedTransaction', async () => {
   });
 
   it('Rollback after creating the user inside of knex transaction', async () => {
-    const isolatedTransaction = new IsolatedTransaction(KnexTransactionRunner);
+    const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await isolatedTransaction.start();
+    const connection = await ptx.start();
 
     const callback = async () => {
-      const user = await isolatedTransaction
-        .connection('user')
-        .insert(data.user);
+      const user = await ptx.connection('user').insert(data.user);
 
-      await isolatedTransaction.rollback();
+      await ptx.rollback();
     };
 
-    await isolatedTransaction.run(connection, callback);
+    await ptx.run(connection, callback);
 
     const selected = await knex
       .select('id', 'name', 'surname')
@@ -76,20 +74,20 @@ describe('IsolatedTransaction', async () => {
   });
 
   it('Throw TransactionError.NotInContext when calling .commit() outside of the context', async () => {
-    const isolatedTransaction = new IsolatedTransaction(KnexTransactionRunner);
+    const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
     const handler = async () => {
-      await isolatedTransaction.commit();
+      await ptx.commit();
     };
 
     assert.rejects(handler, TransactionError.NotInContext());
   });
 
   it('Throw TransactionError.NotInContext when calling .rollback() outside of the context', async () => {
-    const isolatedTransaction = new IsolatedTransaction(KnexTransactionRunner);
+    const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
     const handler = async () => {
-      await isolatedTransaction.rollback();
+      await ptx.rollback();
     };
 
     assert.rejects(handler, TransactionError.NotInContext());

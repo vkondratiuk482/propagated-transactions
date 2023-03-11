@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: 'mokuteki'
       POSTGRES_PASSWORD: 'pass123'
-      POSTGRES_DB: 'isolated-test'
+      POSTGRES_DB: 'propagated-test'
     ports:
       - '5432:5432'
     volumes:

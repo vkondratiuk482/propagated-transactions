@@ -1,9 +1,9 @@
-# @mokuteki/isolated-transactions
+# @mokuteki/propagated-transactions
 Convenient wrapper around AsyncLocalStorage to propagate and manage database transactions without breaking the abstraction layer for Node.js, including Typescript .d.ts support
 
 ## Installation
 ```bash
-npm i @mokuteki/isolated-transactions
+npm i @mokuteki/propagated-transactions
 ```
 
 ## Motivation
@@ -71,10 +71,10 @@ But this approach also breaks the abstraction and ruins the whole idea of separa
 We have decided that we want our business logic be independent of data layer, but still be able to manage operations' atomicity. There are a few steps to follow in order to use this library
 
 1. Create an implementation of `ITransactionRunner` interface (provided by the package) for your specific database, driver, ORM, whatever
-2. Create an instance of `IsolationTransaction` and pass implementation from step one into constructor
-3. Instantiate and store database connection by starting the transaction with `IsolationTransaction.start()`
-4. Create a callback that executes business logic, use `IsolatedTransaction.commit() / IsolatedTransaction.rollback()` inside of it 
-5. Run `IsolatedTransaction.run(connection, callback)`, where `connection` is stored connection from step three, `callback` is a callback from step four
+2. Create an instance of `PropagatedTransaction` and pass implementation from step one into constructor
+3. Instantiate and store database connection by starting the transaction with `PropagatedTransaction.start()`
+4. Create a callback that executes business logic, use `PropagatedTransaction.commit() / PropagatedTransaction.rollback()` inside of it 
+5. Run `PropagatedTransaction.run(connection, callback)`, where `connection` is stored connection from step three, `callback` is a callback from step four
 6. Inside of data layer (for example UserRepository) obtain connection and use it to run your query
 
 
@@ -96,10 +96,10 @@ export interface ITransactionRunner<T extends unknown> {
 Let's implement a TypeormTransactionRunner that manages transactions for Typeorm
 ```ts
 import { DataSource, QueryRunner } from 'typeorm';
-import { IsolatedTransaction, ITransactionRunner } from '@mokuteki/isolated-transaction';
+import { PropagatedTransaction, ITransactionRunner } from '@mokuteki/isolated-transaction';
 
 export class TypeormTransactionRunner implements ITransactionRunner<QueryRunner> {
-  private readonly isolatedTransaction = new IsolatedTransaction();
+  private readonly ptx = new PropagatedTransaction();
 
   constructor(private readonly dataSource: DataSource) {}
 
@@ -147,9 +147,9 @@ const KnexTransactionRunner = {
 ```
 
 ### Step 2
-Create `IsolatedTransaction` instance, it can be created in any way, any where. For example you can create custom provider if you are using Nestjs and inject it inside of your providers. Or you can use approach below 
+Create `PropagatedTransaction` instance, it can be created in any way, any where. For example you can create custom provider if you are using Nestjs and inject it inside of your providers. Or you can use approach below 
 ```ts
-export const isolatedTransaction = new IsolatedTransaction(TypeormTransactionRunner);
+export const ptx = new PropagatedTransaction(TypeormTransactionRunner);
 ```
 
 ### Step 3
@@ -157,13 +157,13 @@ Instantiate and store database connection
 ```ts
 export class UserService {
   constructor(
-    private readonly isolatedTransaction: IsolatedTransaction, 
+    private readonly ptx: PropagatedTransaction, 
     private readonly userRepository: IUserRepository
   ) {}
 
 
   public async create(name: string): Promise<UserEntity> {
-    const connection = await this.isolatedTransaction.start();
+    const connection = await this.ptx.start();
 
     const user = await this.userRepository.create(name);
 
@@ -173,26 +173,26 @@ export class UserService {
 ```
 
 ### Step 4
-Create a callback that executes business logic with the help of `IsolatedTransaction.commit() / IsolatedTransaction.rollback()`
+Create a callback that executes business logic with the help of `PropagatedTransaction.commit() / PropagatedTransaction.rollback()`
 ```ts
 export class UserService {
   constructor(
-    private readonly isolatedTransaction: IsolatedTransaction, 
+    private readonly ptx: PropagatedTransaction, 
     private readonly userRepository: IUserRepository
   ) {}
 
   public async create(id: string): Promise<UserEntity> {
-    const connection = await this.isolatedTransaction.start();
+    const connection = await this.ptx.start();
 
     const callback = async () => {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.commit();
+        await this.ptx.commit();
 
         return user;
       } catch (err) {
-        await this.isolatedTransaction.rollback();
+        await this.ptx.rollback();
       }
     };
 
@@ -200,7 +200,7 @@ export class UserService {
   }
 }
 ```
-If you try calling `IsolatedTransaction.commit() / IsolatedTransaction.rollback()` outside of the context you will receive 
+If you try calling `PropagatedTransaction.commit() / PropagatedTransaction.rollback()` outside of the context you will receive 
 ```ts
 throw TransactionError.NotInContext();
 ^
@@ -214,53 +214,53 @@ Run the transaction
 ```ts
 export class UserService {
   constructor(
-    private readonly isolatedTransaction: IsolatedTransaction, 
+    private readonly ptx: PropagatedTransaction, 
     private readonly userRepository: IUserRepository
   ) {}
 
   public async create(id: string): Promise<UserEntity> {
-    const connection = await this.isolatedTransaction.start();
+    const connection = await this.ptx.start();
 
     const callback = async () => {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.commit();
+        await this.ptx.commit();
 
         return user;
       } catch (err) {
-        await this.isolatedTransaction.rollback();
+        await this.ptx.rollback();
       }
     };
 
-    return this.isolatedTransaction.run(connection, callback);
+    return this.ptx.run(connection, callback);
   }
 }
 ```
-`IsolatedTransaction.run()` returns Promise which resolves with the data returned from the `callback`. You can also wait for the transaction to finish and do something with the results
+`PropagatedTransaction.run()` returns Promise which resolves with the data returned from the `callback`. You can also wait for the transaction to finish and do something with the results
 ```ts
 export class UserService {
   constructor(
-    private readonly isolatedTransaction: IsolatedTransaction, 
+    private readonly ptx: PropagatedTransaction, 
     private readonly userRepository: IUserRepository
   ) {}
 
   public async create(id: string): Promise<UserEntity> {
-    const connection = await this.isolatedTransaction.start();
+    const connection = await this.ptx.start();
 
     const callback = async () => {
       try {
         const user = await this.userRepository.create(name);
 
-        await this.isolatedTransaction.commit();
+        await this.ptx.commit();
 
         return user;
       } catch (err) {
-        await this.isolatedTransaction.rollback();
+        await this.ptx.rollback();
       }
     };
 
-    const user = await this.isolatedTransaction.run(connection, callback);
+    const user = await this.ptx.run(connection, callback);
 
     console.log(user);
 
@@ -270,19 +270,19 @@ export class UserService {
 ```
 
 ### Step 6
-Obtain database connection inside of the data layer using `IsolatedTransaction.connection`
+Obtain database connection inside of the data layer using `PropagatedTransaction.connection`
 ```ts
 export class TypeOrmUserRepository implements IUserRepository {
   constructor(
     private readonly manager: EntityManager, 
-    private readonly isolatedTransaction: IsolatedTransaction,
+    private readonly ptx: PropagatedTransaction,
   ) {}
 
   public async create(name: string): Promise<UserEntity> {
     /**
      * If there is no connection stored, we use our injected one and run the query outside of transaction
      */
-    const manager = this.isolatedTransaction.connection?.manager || this.manager;
+    const manager = this.ptx.connection?.manager || this.manager;
 
     const user = manager.getRepository(TypeormUserEntity).create({ name });
 
@@ -300,4 +300,4 @@ npm run test
 ```
 
 ## License
-Licensed under [MIT](https://github.com/mokuteki225/isolated-transactions/blob/main/LICENSE.md)
+Licensed under [MIT](https://github.com/mokuteki225/propagated-transactions/blob/main/LICENSE.md)
