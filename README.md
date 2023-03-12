@@ -2,8 +2,8 @@
 Convenient wrapper to propagate database connection and give you opportunity to manage the state of your transactions, uses `AsyncLocalStorage` under the hood, Typescript friendly, 0 production dependencies
 
 ### Main advantages and use cases
-* Do not pollute method arguments with connection object `userService.create(payload, connection)`, the package does it for you
-* Don't bind your transaction managing logic to any database, driver, ORM, whatever. In case you need to change one of the mentioned above, you will just need to provide a different implementation of `ITransactionRunner`
+* Package prevents you from polluting method arguments with connection object `userService.create(payload, connection)`
+* Package prevents you from binding your transaction managing logic to any database, driver, ORM, whatever. In case you need to change one of the mentioned above, you will just need to provide a different implementation of `ITransactionRunner`
 
 
 ## Installation
