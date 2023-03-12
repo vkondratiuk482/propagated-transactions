@@ -1,104 +1,119 @@
 # @mokuteki/propagated-transactions
-Convenient wrapper around AsyncLocalStorage to propagate and manage database transactions without breaking the abstraction layer for Node.js, including Typescript .d.ts support
+Convenient wrapper to propagate database connection and give you opportunity to manage the state of your transactions, uses `AsyncLocalStorage` under the hood, Typescript friendly, 0 production dependencies
+
+### Main advantages and use cases
+* Do not pollute method arguments with connection object `userService.create(payload, connection)`, the package does it for you
+* Don't bind your transaction managing logic to any database, driver, ORM, whatever. In case you need to change one of the mentioned above, you will just need to provide a different implementation of `ITransactionRunner`
+
 
 ## Installation
 ```bash
 npm i @mokuteki/propagated-transactions
 ```
 
-## Motivation
-Splitting the business logic and data layers brings a lot of flexebility and overall makes your piece of software better. We don't want the business logic to be bound to one specific implementation of the data layer, or any database driver, ORM, whatever. First we create an interface for our data layer 
-```ts
-export interface IUserRepository {
-  findById(id: string): Promise<UserEntity>
-}
-```
-Then we implement the interface (Typeorm is used in this example)
-```ts
-export class TypeormUserRepository implements IUserRepository {
-  constructor(private readonly userRepository: Repository<TypeormUserEntity>) {}
-
-  public async findById(id: string): Promise<UserEntity> {
-    const user = await this.userRepository
-      .createQueryBuilder('u')
-      .where('id = :id', { id })
-      .getOne();
-
-    return user;
-  }
-}
-```
-So that now we are able to use our implementation through the interface inside of our business logic layer
-```ts
-export class UserService {
-  constructor(private readonly userRepository: IUserRepository) {}
-
-  public async findById(id: string): Promise<UserEntity> {
-    const user = await this.userRepository.findById(id);
-
-    return user;
-  }
-}
-```
-Looks great, but in real life our applications are much more complex, one day you'll have to take care of atomicity of your operations. Due to Node.js asynchronous nature in order to guarantee atomicity we have to book a database connection and execute all of the transaction's operations using this connection. Without separating the layers we could do something like this straight in the business logic layer (Typeorm example)
-```ts
-const queryRunner = dataSource.createQueryRunner()
-
-await queryRunner.connect()
-await queryRunner.startTransaction()
-
-try {
-    await queryRunner.manager.save(user1)
-    await queryRunner.manager.save(user2)
-    await queryRunner.manager.save(photos)
-
-    await queryRunner.commitTransaction()
-} catch (err) {
-    await queryRunner.rollbackTransaction()
-} finally {
-    await queryRunner.release()
-}
-```
-But that will bind the business logic to the ORM which is not a good practice at all. The first solution that comes to mind is to propagate the connection object straight to the Repository
-```ts
-export interface IUserRepository {
-  findById(id: string, queryRunner: QueryRunner): Promise<UserEntity>
-}
-```
-But this approach also breaks the abstraction and ruins the whole idea of separate layers. Here is the place where AsyncLocalStorage and this package come in handy
-
 ## Usage
-We have decided that we want our business logic be independent of data layer, but still be able to manage operations' atomicity. There are a few steps to follow in order to use this library
 
 1. Create an implementation of `ITransactionRunner` interface (provided by the package) for your specific database, driver, ORM, whatever
 2. Create an instance of `PropagatedTransaction` and pass implementation from step one into constructor
 3. Instantiate and store database connection by starting the transaction with `PropagatedTransaction.start()`
 4. Create a callback that executes business logic, use `PropagatedTransaction.commit() / PropagatedTransaction.rollback()` inside of it 
 5. Run `PropagatedTransaction.run(connection, callback)`, where `connection` is stored connection from step three, `callback` is a callback from step four
-6. Inside of data layer (for example UserRepository) obtain connection and use it to run your query
+6. Obtain connection inside of inner method/abstraction layer and use it to run your query
 
+### Javascript example
 
-Let's take a more detailed view on each of the steps:
+```js
+const { PropagatedTransaction } = require('@mokuteki/propagated-transactions');
 
-### Step 1
-Library provides ITransactionRunner interface which looks like this
-```ts
-// types/isolated-transaction.d.ts
+const knex = require('knex')({
+  client: 'pg',
+  connection: {
+    version: '8.10',
+    host: '127.0.0.1',
+    port: 5432,
+    user: 'mokuteki',
+    password: 'pass123',
+    database: 'propagated-test',
+  },
+});
 
-export interface ITransactionRunner<T extends unknown> {
-  start(): Promise<T>;
+// Step 1
+const KnexTransactionRunner = {
+  start: async () => {
+    const trx = await knex.transaction();
 
-  commit(connection: T): Promise<void>;
-  
-  rollback(connection: T): Promise<void>;
+    return trx;
+  },
+  commit: async (trx) => {
+    return trx.commit();
+  },
+  rollback: async (trx) => {
+    return trx.rollback();
+  },
+};
+
+// Step 2
+module.exports.ptx = new PropagatedTransaction(KnexTransactionRunner);
+```
+
+```js
+async create(payload1, payload2) {
+  // Step 3
+  const connection = await this.ptx.start();
+
+  // Step 4
+  const callback = async () => {
+    try {
+      const user = await userService.create(payload1);
+      const wallet = await walletService.create(payload2);
+
+      await this.ptx.commit();
+
+      return user;
+    } catch (err) {
+      await this.ptx.rollback();
+    }
+  };
+
+  // Step 5
+  const user = await this.ptx.run(connection, callback);
+
+  return user;
 }
 ```
-Let's implement a TypeormTransactionRunner that manages transactions for Typeorm
+
+```js
+class UserService {
+  async create(payload) {
+    /**
+     * Step 6
+     * If you run this method in PropagatedTransaction context it will be executed in transaction
+     * Otherwise it will be executed as usual query
+     */
+    const connection = ptx.connection || knex;
+    return connection('user').insert(payload);
+  }
+}
+```
+
+```js
+class WalletService {
+  async create(payload, trx) {
+    // Step 6
+    const connection = ptx.connection || knex;
+    return connection('wallet').insert(payload);
+  }
+}
+```
+
+### Typescript example + Layers Separation
+
 ```ts
 import { DataSource, QueryRunner } from 'typeorm';
-import { PropagatedTransaction, ITransactionRunner } from '@mokuteki/isolated-transaction';
+import { PropagatedTransaction, ITransactionRunner } from '@mokuteki/propagated-transactions';
 
-export class TypeormTransactionRunner implements ITransactionRunner<QueryRunner> {
+// Step 1
+class TypeormTransactionRunner implements ITransactionRunner<QueryRunner> {
   private readonly ptx = new PropagatedTransaction();
 
   constructor(private readonly dataSource: DataSource) {}
@@ -128,168 +143,146 @@ export class TypeormTransactionRunner implements ITransactionRunner<QueryRunner>
     return queryRunner.release();
   }
 }
-```
-Library works like a charm even without Typescript, so you don't have to use Typescript-specific `interfaces` and `implement` syntax to make it work. Here is an example of pure Javascript implementation for Knex library
-```js
-const KnexTransactionRunner = {
-  start: async () => {
-    const trx = await knex.transaction();
 
-    return trx;
-  },
-  commit: async (trx) => {
-    return trx.commit();
-  },
-  rollback: async (trx) => {
-    return trx.rollback();
-  },
-};
-```
-
-### Step 2
-Create `PropagatedTransaction` instance, it can be created in any way, any where. For example you can create custom provider if you are using Nestjs and inject it inside of your providers. Or you can use approach below 
-```ts
+// Step 2
 export const ptx = new PropagatedTransaction(TypeormTransactionRunner);
 ```
 
-### Step 3
-Instantiate and store database connection
 ```ts
 export class UserService {
   constructor(
     private readonly ptx: PropagatedTransaction, 
-    private readonly userRepository: IUserRepository
+    private readonly userRepository: IUserRepository, 
+    private readonly walletRepository: IWalletRepository, 
   ) {}
 
-
-  public async create(name: string): Promise<UserEntity> {
+  public async create(
+    payload1: ICreateUser, 
+    payload2: ICreateWallet
+  ): Promise<UserEntity> {
+    // Step 3
     const connection = await this.ptx.start();
 
-    const user = await this.userRepository.create(name);
+    // Step 4
+    const callback = async () => {
+      try {
+        const user = await this.userRepository.create(payload1);
+        const wallet = await this.walletRepository.create(payload2);
+
+        await this.ptx.commit();
+
+        return user;
+      } catch (err) {
+        await this.ptx.rollback();
+      }
+    };
+
+    // Step 5
+    const user = await this.ptx.run<Promise<UserEntity>>(connection, callback);
 
     return user;
   }
 }
 ```
 
-### Step 4
-Create a callback that executes business logic with the help of `PropagatedTransaction.commit() / PropagatedTransaction.rollback()`
 ```ts
-export class UserService {
-  constructor(
-    private readonly ptx: PropagatedTransaction, 
-    private readonly userRepository: IUserRepository
-  ) {}
-
-  public async create(id: string): Promise<UserEntity> {
-    const connection = await this.ptx.start();
-
-    const callback = async () => {
-      try {
-        const user = await this.userRepository.create(name);
-
-        await this.ptx.commit();
-
-        return user;
-      } catch (err) {
-        await this.ptx.rollback();
-      }
-    };
-
-    return null;
-  }
-}
-```
-If you try calling `PropagatedTransaction.commit() / PropagatedTransaction.rollback()` outside of the context you will receive 
-```ts
-throw TransactionError.NotInContext();
-^
-
-TransactionError: You are trying to get connection object outside of AsyncLocalStorage context
-```
-
-### Step 5
-
-Run the transaction
-```ts
-export class UserService {
-  constructor(
-    private readonly ptx: PropagatedTransaction, 
-    private readonly userRepository: IUserRepository
-  ) {}
-
-  public async create(id: string): Promise<UserEntity> {
-    const connection = await this.ptx.start();
-
-    const callback = async () => {
-      try {
-        const user = await this.userRepository.create(name);
-
-        await this.ptx.commit();
-
-        return user;
-      } catch (err) {
-        await this.ptx.rollback();
-      }
-    };
-
-    return this.ptx.run(connection, callback);
-  }
-}
-```
-`PropagatedTransaction.run()` returns Promise which resolves with the data returned from the `callback`. You can also wait for the transaction to finish and do something with the results
-```ts
-export class UserService {
-  constructor(
-    private readonly ptx: PropagatedTransaction, 
-    private readonly userRepository: IUserRepository
-  ) {}
-
-  public async create(id: string): Promise<UserEntity> {
-    const connection = await this.ptx.start();
-
-    const callback = async () => {
-      try {
-        const user = await this.userRepository.create(name);
-
-        await this.ptx.commit();
-
-        return user;
-      } catch (err) {
-        await this.ptx.rollback();
-      }
-    };
-
-    const user = await this.ptx.run(connection, callback);
-
-    console.log(user);
-
-    return user;
-  }
-}
-```
-
-### Step 6
-Obtain database connection inside of the data layer using `PropagatedTransaction.connection`
-```ts
-export class TypeOrmUserRepository implements IUserRepository {
+export class UserRepository implements IUserRepository {
   constructor(
     private readonly manager: EntityManager, 
     private readonly ptx: PropagatedTransaction,
   ) {}
 
-  public async create(name: string): Promise<UserEntity> {
-    /**
-     * If there is no connection stored, we use our injected one and run the query outside of transaction
-     */
+  /**
+   * Step 6
+   * If you run this method in PropagatedTransaction context it will be executed in transaction
+   * Otherwise it will be executed as usual query
+   */
+  public async create(data: ICreateUser): Promise<UserEntity> {
     const manager = this.ptx.connection?.manager || this.manager;
 
-    const user = manager.getRepository(TypeormUserEntity).create({ name });
+    const user = manager.getRepository(TypeormUserEntity).create(data);
 
     return manager.save(user)
   }
 }
 ```
+
+```ts
+export class WalletRepository implements IWalletRepository {
+  constructor(
+    private readonly manager: EntityManager, 
+    private readonly ptx: PropagatedTransaction,
+  ) {}
+
+  /**
+   * Step 6
+   * If you run this method in PropagatedTransaction context it will be executed in transaction
+   * Otherwise it will be executed as usual query
+   */
+  public async create(data: ICreateWallet): Promise<WalletEntity> {
+    const manager = this.ptx.connection?.manager || this.manager;
+
+    const wallet = manager.getRepository(TypeormWalletEntity).create(data);
+
+    return manager.save(wallet)
+  }
+}
+```
+
+
+
+## Motivation
+
+Imagine we need to run `UserService.create()` and `WalletService.create()` in transaction
+
+```js
+class UserService {
+  async create(payload) {
+    return knex('user').insert(payload);
+  }
+}
+```
+
+```js
+class WalletService {
+  async create(payload) {
+    return knex('wallet').insert(payload);
+  }
+}
+```
+
+Due to Node.js asynchronous nature in order to guarantee operations' atomicity we have to book a database connection and execute all of the transaction's operations using this specific connection. So we have to do something like this
+```js
+class UserService {
+  async create(payload, trx) {
+    return trx('user').insert(payload);
+  }
+}
+```
+
+```js
+class WalletService {
+  async create(payload, trx) {
+    return trx('wallet').insert(payload);
+  }
+}
+```
+
+```js
+async create(payload1, payload2) {
+  const trx = await knex.transaction();
+
+  try {
+    const user = await userService.create(payload1, trx);
+    const wallet = await walletService.create(payload2, trx);
+
+    await trx.commit();
+  } catch (err) {
+    await trx.rollback();
+  }
+}
+```
+The idea of this package is to propagate the connection and give you opportunity to manage the state of your transaction without binding your business logic to any database, ORM, driver, whatever
 
 ## Tests
 Before doing any kind of contribution run tests, here is how
