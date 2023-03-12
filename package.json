@@ -1,6 +1,6 @@
 {
   "name": "@mokuteki/propagated-transactions",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Convenient wrapper to propagate and manage database transactions using AsyncLocalStorage",
   "main": "lib/propagated-transaction.js",
   "scripts": {
