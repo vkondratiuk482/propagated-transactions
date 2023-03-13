@@ -114,8 +114,6 @@ import { PropagatedTransaction, ITransactionRunner } from '@mokuteki/propagated-
 
 // Step 1
 class TypeormTransactionRunner implements ITransactionRunner<QueryRunner> {
-  private readonly ptx = new PropagatedTransaction();
-
   constructor(private readonly dataSource: DataSource) {}
 
   /**
