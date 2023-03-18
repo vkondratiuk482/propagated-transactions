@@ -59,7 +59,7 @@ module.exports.ptx = new PropagatedTransaction(KnexTransactionRunner);
 ```js
 async create(payload1, payload2) {
   // Step 3
-  const connection = await this.ptx.start();
+  const connection = await ptx.start();
 
   // Step 4
   const callback = async () => {
@@ -67,16 +67,16 @@ async create(payload1, payload2) {
       const user = await userService.create(payload1);
       const wallet = await walletService.create(payload2);
 
-      await this.ptx.commit();
+      await ptx.commit();
 
       return user;
     } catch (err) {
-      await this.ptx.rollback();
+      await ptx.rollback();
     }
   };
 
   // Step 5
-  const user = await this.ptx.run(connection, callback);
+  const user = await ptx.run(connection, callback);
 
   return user;
 }
