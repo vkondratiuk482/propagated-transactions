@@ -98,7 +98,7 @@ class UserService {
 
 ```js
 class WalletService {
-  async create(payload, trx) {
+  async create(payload) {
     // Step 6
     const connection = ptx.connection || knex;
     return connection('wallet').insert(payload);
