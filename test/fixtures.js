@@ -6,7 +6,7 @@ const knex = require('knex')({
     port: 5432,
     user: 'mokuteki',
     password: 'pass123',
-    database: 'isolated-test',
+    database: 'propagated-test',
   },
 });
 
@@ -14,8 +14,10 @@ const knex = require('knex')({
  * Example of the runner that implements ITransactionRunner
  */
 const KnexTransactionRunner = {
-  start: async () => {
-    const trx = await knex.transaction();
+  start: async (isolationLevel) => {
+    const trx = await knex.transaction({
+      isolationLevel: isolationLevel.toLowerCase(),
+    });
 
     return trx;
   },
@@ -32,6 +34,7 @@ const data = {
     id: 1,
     name: 'Mykola',
     surname: 'Lysenko',
+    balance: 0,
   },
 };
 

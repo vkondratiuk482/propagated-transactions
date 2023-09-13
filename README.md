@@ -20,7 +20,9 @@ npm i @mokuteki/propagated-transactions
 5. Run `PropagatedTransaction.run(connection, callback)`, where `connection` is stored connection from step three, `callback` is a callback from step four
 6. Obtain connection inside of inner method/abstraction layer and use it to run your query
 
-### Javascript example
+### Examples
+
+#### Javascript example
 
 ```js
 const { PropagatedTransaction } = require('@mokuteki/propagated-transactions');
@@ -106,7 +108,7 @@ class WalletService {
 }
 ```
 
-### Typescript example + Layers Separation
+#### Typescript example + Layers Separation
 
 ```ts
 import { DataSource, QueryRunner } from 'typeorm';
@@ -227,7 +229,58 @@ export class WalletRepository implements IWalletRepository {
 }
 ```
 
+#### Isolation Level 
+Package gives you an ability to work with essential isolation levels: 
+* `READ COMMITTED` 
+* `READ UNCOMMITTED` 
+* `REPEATABLE READ` 
+* `SERIALIZABLE`
 
+By default we use `READ COMMITTED` isolations level
+
+```js
+const KnexTransactionRunner = {
+  start: async (isolationLevel) => {
+    // adapt internal @mokuteki/propagated-transactions isolation level to the one your transaction runner uses
+    const adaptedIsolationLevel = adapt(isolationLevel);
+
+    const trx = await knex.transaction({
+      isolationLevel: adaptedIsolationLevel,
+    });
+
+    return trx;
+  },
+  commit: async (trx) => {
+    return trx.commit();
+  },
+  rollback: async (trx) => {
+    return trx.rollback();
+  },
+};
+```
+
+```js
+async create(payload1, payload2) {
+  const connection = await ptx.start('SERIALIZABLE');
+
+  const callback = async () => {
+    try {
+      const user = await userService.create(payload1);
+      const wallet = await walletService.create(payload2);
+
+      await ptx.commit();
+
+      return user;
+    } catch (err) {
+      await ptx.rollback();
+    }
+  };
+
+  const user = await ptx.run(connection, callback);
+
+  return user;
+}
+```
 
 ## Motivation
 
