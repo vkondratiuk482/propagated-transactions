@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { IsolationLevels } from '../lib/propagated-transaction';
 
 export interface ITransactionRunner<T extends unknown> {
   /**
@@ -23,11 +24,4 @@ export class PropagatedTransaction<T extends unknown> {
   rollback(): Promise<void>;
 
   run<R>(connection: unknown, callback: () => R): R;
-}
-
-export enum IsolationLevels {
-  READ_COMMITTED = 'READ COMMITTED',
-  READ_UNCOMMITTED = 'READ UNCOMMITTED',
-  REPEATABLE_READ = 'REPEATABLE READ',
-  SERIALIZABLE = 'SERIALIZABLE',
 }
