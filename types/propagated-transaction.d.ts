@@ -1,11 +1,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { IsolationLevels } from '../lib/propagated-transaction';
+
+type IsolationLevelKey = 'Serializable' | 'ReadCommitted' | 'RepeatableRead' | 'ReadUncommitted'
+type IsolationLevelValue = 'SERIALIZABLE' | 'READ COMMITTED' | 'REPEATABLE READ' | 'READ UNCOMMITTED';
+
+export const IsolationLevels: Record<IsolationLevelKey, IsolationLevelValue> = {
+  Serializable: 'SERIALIZABLE',
+  ReadCommitted: 'READ COMMITTED',
+  RepeatableRead: 'REPEATABLE READ',
+  ReadUncommitted: 'READ UNCOMMITTED',
+};
 
 export interface ITransactionRunner<T extends unknown> {
   /**
    * Get transaction object to store it in AsyncLocalStorage
    */
-  start(isolationLevel?: IsolationLevels): Promise<T>;
+  start(isolationLevel?: IsolationLevelValue): Promise<T>;
 
   commit(connection: T): Promise<void>;
   
@@ -17,7 +26,7 @@ export class PropagatedTransaction<T extends unknown> {
 
   constructor(runner: ITransactionRunner<T>, als?: AsyncLocalStorage<T>);
 
-  start(isolationLevel?: IsolationLevels): Promise<unknown>;
+  start(isolationLevel?: IsolationLevelValue): Promise<unknown>;
 
   commit(): Promise<void>;
 

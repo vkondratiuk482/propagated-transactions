@@ -261,7 +261,7 @@ const KnexTransactionRunner = {
 
 ```js
 async create(payload1, payload2) {
-  const connection = await ptx.start('SERIALIZABLE');
+  const connection = await ptx.start(IsolationLevels.ReadCommitted);
 
   const callback = async () => {
     try {
