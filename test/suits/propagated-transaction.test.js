@@ -6,6 +6,7 @@ const { knex, data, KnexTransactionRunner } = require('#test/fixtures.js');
 const {
   PropagatedTransaction,
 } = require('#root/lib/propagated-transaction.js');
+const { IsolationLevels } = require('../../lib/propagated-transaction');
 
 describe('PropagatedTransaction', async () => {
   before(async () => {
@@ -57,13 +58,13 @@ describe('PropagatedTransaction', async () => {
 
     const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await ptx.start('REPEATABLE READ');
+    const connection = await ptx.start(IsolationLevels.ReadCommitted);
 
     const callback = async () => {
       try {
         /**
          * For some reason isolation levels don't work as expected if we don't execute at least one random query before performing any query on the outer connection
-         * Even though DEBUG=knex:query shows the proper order of SQL queries it still returns worng results from time to time.
+         * Even though DEBUG=knex:query shows the proper order of SQL queries it still returns wrong results from time to time.
          */
         await ptx.connection('user').count();
 
