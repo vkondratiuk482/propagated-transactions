@@ -32,9 +32,9 @@ const KnexTransactionRunner = {
 const data = {
   user: {
     id: 1,
+    balance: 0,
     name: 'Mykola',
     surname: 'Lysenko',
-    balance: 0,
   },
 };
 
