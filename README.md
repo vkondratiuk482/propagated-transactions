@@ -246,7 +246,7 @@ async create(payload1, payload2) {
     return user;
   };
 
-  const user = await ptx.run(callback);
+  const user = await ptx.run(callback, IsolationLevels.Serializable);
 
   return user;
 }
