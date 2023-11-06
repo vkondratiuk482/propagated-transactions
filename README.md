@@ -214,6 +214,8 @@ Package gives you an ability to work with essential isolation levels:
 * `REPEATABLE READ` 
 * `SERIALIZABLE`
 
+Just import `IsolationLevels` and pass the desired level as a second argument of `PropagatedTransaction.run()` method
+
 By default we use `READ COMMITTED` isolations level
 
 ```js
@@ -238,6 +240,10 @@ const KnexTransactionRunner = {
 ```
 
 ```js
+const { IsolationLevels } = require('@mokuteki/propagated-transactions')
+
+// some code
+
 async create(payload1, payload2) {
   const callback = async () => {
     const user = await userService.create(payload1);
