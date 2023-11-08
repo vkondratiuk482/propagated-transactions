@@ -15,10 +15,8 @@ npm i @mokuteki/propagated-transactions
 
 1. Create an implementation of `ITransactionRunner` interface (provided by the package) for your specific database, driver, ORM, whatever
 2. Create an instance of `PropagatedTransaction` and pass implementation from step one into constructor
-3. Instantiate and store database connection by starting the transaction with `PropagatedTransaction.start()`
-4. Create a callback that executes business logic, use `PropagatedTransaction.commit() / PropagatedTransaction.rollback()` inside of it 
-5. Run `PropagatedTransaction.run(connection, callback)`, where `connection` is stored connection from step three, `callback` is a callback from step four
-6. Obtain connection inside of inner method/abstraction layer and use it to run your query
+3. Create a callback that executes business logic, pass it to `PropagatedTransaction.run()`. If the execution of the provided callback fails - the library rollbacks the transaction and rethrows the error. In case of a successful execution we implicitly commit the transaction and return the value from the callback
+4. Obtain connection inside of inner method/abstraction layer and use it to run your query
 
 ### Examples
 
@@ -61,24 +59,14 @@ module.exports.ptx = new PropagatedTransaction(KnexTransactionRunner);
 ```js
 async create(payload1, payload2) {
   // Step 3
-  const connection = await ptx.start();
-
-  // Step 4
   const callback = async () => {
-    try {
-      const user = await userService.create(payload1);
-      const wallet = await walletService.create(payload2);
+    const user = await userService.create(payload1);
+    const wallet = await walletService.create(payload2);
 
-      await ptx.commit();
-
-      return user;
-    } catch (err) {
-      await ptx.rollback();
-    }
+    return user;
   };
 
-  // Step 5
-  const user = await ptx.run(connection, callback);
+  const user = await ptx.run(callback);
 
   return user;
 }
@@ -88,7 +76,7 @@ async create(payload1, payload2) {
 class UserService {
   async create(payload) {
     /**
-     * Step 6
+     * Step 4
      * If you run this method in PropagatedTransaction context it will be executed in transaction
      * Otherwise it will be executed as usual query
      */
@@ -101,7 +89,7 @@ class UserService {
 ```js
 class WalletService {
   async create(payload) {
-    // Step 6
+    // Step 4
     const connection = ptx.connection || knex;
     return connection('wallet').insert(payload);
   }
@@ -161,24 +149,14 @@ export class UserService {
     payload2: ICreateWallet
   ): Promise<UserEntity> {
     // Step 3
-    const connection = await this.ptx.start();
-
-    // Step 4
     const callback = async () => {
-      try {
-        const user = await this.userRepository.create(payload1);
-        const wallet = await this.walletRepository.create(payload2);
+      const user = await this.userRepository.create(payload1);
+      const wallet = await this.walletRepository.create(payload2);
 
-        await this.ptx.commit();
-
-        return user;
-      } catch (err) {
-        await this.ptx.rollback();
-      }
+      return user;
     };
 
-    // Step 5
-    const user = await this.ptx.run<Promise<UserEntity>>(connection, callback);
+    const user = await this.ptx.run<Promise<UserEntity>>(callback);
 
     return user;
   }
@@ -193,7 +171,7 @@ export class UserRepository implements IUserRepository {
   ) {}
 
   /**
-   * Step 6
+   * Step 4
    * If you run this method in PropagatedTransaction context it will be executed in transaction
    * Otherwise it will be executed as usual query
    */
@@ -215,7 +193,7 @@ export class WalletRepository implements IWalletRepository {
   ) {}
 
   /**
-   * Step 6
+   * Step 4
    * If you run this method in PropagatedTransaction context it will be executed in transaction
    * Otherwise it will be executed as usual query
    */
@@ -235,6 +213,8 @@ Package gives you an ability to work with essential isolation levels:
 * `READ UNCOMMITTED` 
 * `REPEATABLE READ` 
 * `SERIALIZABLE`
+
+Just import `IsolationLevels` and pass the desired level as a second argument of `PropagatedTransaction.run()` method
 
 By default we use `READ COMMITTED` isolations level
 
@@ -260,27 +240,53 @@ const KnexTransactionRunner = {
 ```
 
 ```js
+const { IsolationLevels } = require('@mokuteki/propagated-transactions')
+
+// some code
+
 async create(payload1, payload2) {
-  const connection = await ptx.start(IsolationLevels.ReadCommitted);
-
   const callback = async () => {
-    try {
-      const user = await userService.create(payload1);
-      const wallet = await walletService.create(payload2);
+    const user = await userService.create(payload1);
+    const wallet = await walletService.create(payload2);
 
-      await ptx.commit();
-
-      return user;
-    } catch (err) {
-      await ptx.rollback();
-    }
+    return user;
   };
 
-  const user = await ptx.run(connection, callback);
+  const user = await ptx.run(callback, IsolationLevels.Serializable);
 
   return user;
 }
 ```
+
+#### Nested execution
+Since version <b><u>1.2.0</u></b> the library supports execution of nested transactions like in the example below. That means that if we call `updateBalance` from `create`, the `updateBalance` won't start a separate transaction, and will be treated as a part of `create's` transaction. However, if we call `updateBalance` directly, it will start its own transaction
+
+
+```js
+async create(payload1, payload2) {
+  const callback = async () => {
+    const user = await userService.create(payload1);
+    const wallet = await walletService.create(payload2);
+
+    return user;
+  };
+
+  const user = await ptx.run(callback);
+
+  return user;
+}
+```
+
+```js
+async updateBalance(payload2) {
+  const callback = async () => {
+    await walletService.updateBalance(payload2);
+  };
+
+  return ptx.run(callback);
+}
+```
+
 
 ## Motivation
 

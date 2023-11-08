@@ -1,12 +1,12 @@
 const assert = require('node:assert');
-const { describe, it, before, afterEach, after } = require('node:test');
+const { describe, it, before, after, beforeEach } = require('node:test');
 
 const { TransactionError } = require('#root/lib/transaction-error.js');
 const { knex, data, KnexTransactionRunner } = require('#test/fixtures.js');
 const {
+  IsolationLevels,
   PropagatedTransaction,
 } = require('#root/lib/propagated-transaction.js');
-const { IsolationLevels } = require('../../lib/propagated-transaction');
 
 describe('PropagatedTransaction', async () => {
   before(async () => {
@@ -19,30 +19,22 @@ describe('PropagatedTransaction', async () => {
     });
   });
 
-  afterEach(async () => {
+  beforeEach(async () => {
     await knex('user').del();
   });
 
   after(() => {
-    process.exit(0);
+    process.exit();
   });
 
   it('Successfully create user inside of knex transaction', async () => {
     const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await ptx.start();
-
     const callback = async () => {
-      try {
-        const user = await ptx.connection('user').insert(data.user);
-
-        await ptx.commit();
-      } catch (err) {
-        await ptx.rollback();
-      }
+      const user = await ptx.connection('user').insert(data.user);
     };
 
-    await ptx.run(connection, callback);
+    await ptx.run(callback);
 
     const selected = await knex
       .select('*')
@@ -50,7 +42,7 @@ describe('PropagatedTransaction', async () => {
       .where('id', data.user.id)
       .first();
 
-    assert.deepEqual(selected, data.user);
+    assert.deepStrictEqual(selected, data.user);
   });
 
   it('Successfully execute callback and verify that specifying isolation level works as expected', async () => {
@@ -58,50 +50,52 @@ describe('PropagatedTransaction', async () => {
 
     const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await ptx.start(IsolationLevels.ReadCommitted);
-
     const callback = async () => {
-      try {
-        /**
-         * For some reason isolation levels don't work as expected if we don't execute at least one random query before performing any query on the outer connection
-         * Even though DEBUG=knex:query shows the proper order of SQL queries it still returns wrong results from time to time.
-         */
-        await ptx.connection('user').count();
+      /**
+       * For some reason isolation levels don't work as expected if we don't execute at least one random query before performing any query on the outer connection
+       * Even though DEBUG=knex:query shows the proper order of SQL queries it still returns wrong results from time to time.
+       */
+      await ptx.connection('user').count();
 
-        // Operation that is being executed using outer connection
-        await knex('user').where({ id: data.user.id }).update({ balance: 100 });
+      // Operation that is being executed using outer connection
+      await knex('user').where({ id: data.user.id }).update({ balance: 100 });
 
-        const user = await ptx
-          .connection('user')
-          .where({ id: data.user.id })
-          .select('*')
-          .first();
+      const user = await ptx
+        .connection('user')
+        .where({ id: data.user.id })
+        .select('*')
+        .first();
 
-        await ptx.commit();
-
-        return user;
-      } catch (err) {
-        await ptx.rollback();
-      }
+      return user;
     };
 
-    const user = await ptx.run(connection, callback);
+    const user = await ptx.run(callback, IsolationLevels.RepeatableRead);
 
     assert.strictEqual(user.balance, data.user.balance);
   });
 
-  it('Rollback after creating the user inside of knex transaction', async () => {
+  it('Successfully reuse connection inside of a nested transaction', async () => {
     const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const connection = await ptx.start();
+    const nestedMethod = async (id) => {
+      const nestedCallback = async () => {
+        return ptx.connection('user').where({ id }).select('*').first();
+      };
 
-    const callback = async () => {
-      await ptx.connection('user').insert(data.user);
-
-      await ptx.rollback();
+      return ptx.run(nestedCallback);
     };
 
-    await ptx.run(connection, callback);
+    const method = async () => {
+      const callback = async () => {
+        await ptx.connection('user').insert(data.user);
+
+        return nestedMethod(data.user.id);
+      };
+
+      return ptx.run(callback);
+    };
+
+    const result = await method();
 
     const selected = await knex
       .select('*')
@@ -109,26 +103,32 @@ describe('PropagatedTransaction', async () => {
       .where('id', data.user.id)
       .first();
 
-    assert.deepEqual(selected, undefined);
+    assert.deepStrictEqual(selected, result);
   });
 
-  it('Throw TransactionError.NotInContext when calling .commit() outside of the context', async () => {
+  it('Rollback after creating the user inside of knex transaction', async () => {
     const ptx = new PropagatedTransaction(KnexTransactionRunner);
 
-    const handler = async () => {
-      await ptx.commit();
+    const error = new Error('Internal error');
+
+    const callback = async () => {
+      await ptx.connection('user').insert(data.user);
+
+      throw error;
     };
 
-    assert.rejects(handler, TransactionError.NotInContext());
-  });
-
-  it('Throw TransactionError.NotInContext when calling .rollback() outside of the context', async () => {
-    const ptx = new PropagatedTransaction(KnexTransactionRunner);
-
     const handler = async () => {
-      await ptx.rollback();
+      await ptx.run(callback);
     };
 
-    assert.rejects(handler, TransactionError.NotInContext());
+    assert.rejects(handler, error);
+
+    const selected = await knex
+      .select('*')
+      .from('user')
+      .where('id', data.user.id)
+      .first();
+
+    assert.deepStrictEqual(selected, undefined);
   });
 });
