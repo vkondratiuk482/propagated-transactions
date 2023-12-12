@@ -26,11 +26,5 @@ export class PropagatedTransaction<T extends unknown> {
 
   constructor(runner: ITransactionRunner<T>, als?: AsyncLocalStorage<T>);
 
-  start(isolationLevel?: IsolationLevelValue): Promise<unknown>;
-
-  commit(): Promise<void>;
-
-  rollback(): Promise<void>;
-
-  run<R>(connection: unknown, callback: () => R): R;
+  run<R>(callback: () => R, isolationLevel?: IsolationLevelValue): R;
 }
