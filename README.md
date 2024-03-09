@@ -139,7 +139,7 @@ export const ptx = new PropagatedTransaction(TypeormTransactionRunner);
 ```ts
 export class UserService {
   constructor(
-    private readonly ptx: PropagatedTransaction, 
+    private readonly ptx: PropagatedTransaction<unknown>, 
     private readonly userRepository: IUserRepository, 
     private readonly walletRepository: IWalletRepository, 
   ) {}
@@ -167,7 +167,7 @@ export class UserService {
 export class UserRepository implements IUserRepository {
   constructor(
     private readonly manager: EntityManager, 
-    private readonly ptx: PropagatedTransaction,
+    private readonly ptx: PropagatedTransaction<QueryRunner>,
   ) {}
 
   /**
@@ -189,7 +189,7 @@ export class UserRepository implements IUserRepository {
 export class WalletRepository implements IWalletRepository {
   constructor(
     private readonly manager: EntityManager, 
-    private readonly ptx: PropagatedTransaction,
+    private readonly ptx: PropagatedTransaction<QueryRunner>,
   ) {}
 
   /**
